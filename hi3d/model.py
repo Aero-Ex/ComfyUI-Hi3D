@@ -137,6 +137,15 @@ class SparseCrossAttention(nn.Module):
         q = self.to_q(x).view(x.shape[0], self.num_heads, -1)
         k, v = self.to_kv(context).view(context.shape[0], context.shape[1], 2, self.num_heads, -1).unbind(2)
         h = span_attention(q, k, v, layout, transformer_options=transformer_options, preferred_attention=self.comfy_attention)
+        if torch.isnan(h).any():
+            # attention kernel produced NaN in this dtype (seen on RDNA2/fp16): redo it in fp32
+            outs = []
+            for i, sp in enumerate(layout):
+                qi = q[sp].float().permute(1, 0, 2)[None]
+                ki = k[i].float().permute(1, 0, 2)[None]
+                vi = v[i].float().permute(1, 0, 2)[None]
+                outs.append(F.scaled_dot_product_attention(qi, ki, vi)[0].permute(1, 0, 2))
+            h = torch.cat(outs).to(q.dtype)
         return self.to_out(h.flatten(1))
 
 
