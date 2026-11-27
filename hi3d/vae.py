@@ -152,7 +152,7 @@ class AttentionBlock(nn.Module):
                 gather = order[pad]
         qkv = self.qkv(self.norm1(feats))[gather].view(-1, window, 3, self.num_heads, c // self.num_heads)
         q, k, v = qkv.unbind(2)
-        out = dense_attention(q, k, v, preferred_attention=self.comfy_attention).reshape(-1, c)[:n]
+        out = dense_attention(q, k, v, preferred_attention=self.comfy_attention, low_precision_attention=False).reshape(-1, c)[:n]
         inverse = torch.empty_like(order)
         inverse[order] = torch.arange(n, device=order.device)
         feats = feats + self.proj(out[inverse])
@@ -171,9 +171,12 @@ class Unpool(nn.Module):
     def forward(self, x, resolution):
         occupied = self.cls_conv(x, norm=self.cls_norm).feats > 0
         counts = occupied.sum(0).tolist()
+        total = sum(counts)
+        if total == 0:
+            raise RuntimeError("Hi3D VAE Unpool predicted 0 occupied voxels (non-finite or degenerate latent features).")
         c = x.feats.shape[1]
-        feats = torch.empty(sum(counts), c, device=x.feats.device, dtype=x.feats.dtype)
-        coords = torch.empty(sum(counts), 4, device=x.coords.device, dtype=x.coords.dtype)
+        feats = torch.empty(total, c, device=x.feats.device, dtype=x.feats.dtype)
+        coords = torch.empty(total, 4, device=x.coords.device, dtype=x.coords.dtype)
         start = 0
         for child, count in enumerate(counts):
             parents = occupied[:, child]

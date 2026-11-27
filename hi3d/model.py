@@ -136,7 +136,7 @@ class SparseCrossAttention(nn.Module):
     def forward(self, x, context, layout, transformer_options):
         q = self.to_q(x).view(x.shape[0], self.num_heads, -1)
         k, v = self.to_kv(context).view(context.shape[0], context.shape[1], 2, self.num_heads, -1).unbind(2)
-        h = span_attention(q, k, v, layout, transformer_options=transformer_options, preferred_attention=self.comfy_attention)
+        h = span_attention(q, k, v, layout, transformer_options=transformer_options, preferred_attention=self.comfy_attention, attn_precision=torch.float32, low_precision_attention=False)
         return self.to_out(h.flatten(1))
 
 
